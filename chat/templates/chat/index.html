@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat with GPT-4</title>
+    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        #chatBox {
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 400px;
+            overflow-y: auto;
+            background-color: #fff;
+            margin-bottom: 10px;
+        }
+        #messageInput {
+            width: 80%;
+            padding: 10px;
+        }
+        #sendButton {
+            padding: 10px;
+        }
+        .user-message {
+            color: blue;
+        }
+        .ai-message {
+            color: green;
+        }
+        .error-message {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <h1>Chat with GPT-4</h1>
+    <div id="chatBox"></div>
+    <label for="messageInput">Enter your message:</label>
+    <input id="messageInput" type="text" placeholder="Send a message..."/>
+    <button id="sendButton">Send</button>
+
+    <script>
+        let chatSocket;
+
+        function connectWebSocket() {
+            chatSocket = new WebSocket('ws://' + window.location.host + '/ws/chat/');
+
+            chatSocket.onopen = function() {
+                console.log('WebSocket connection established.');
+                sendButton.disabled = false;
+            };
+
+            chatSocket.onmessage = function(e) {
+                console.log('Message received:', e.data);
+                const data = JSON.parse(e.data);
+                if (data.error) {
+                    appendMessage('Error: ' + data.error, 'error-message');
+                } else if (data.user_message && data.ai_response) {
+                    appendMessage('You: ' + data.user_message, 'user-message');
+                    appendMessage('GPT-4: ' + data.ai_response, 'ai-message');
+                }
+            };
+
+            chatSocket.onclose = function() {
+                console.log('WebSocket connection closed.');
+                appendMessage('Connection closed. Reconnecting...', 'error-message');
+                sendButton.disabled = true;
+                // Try to reconnect after 3 seconds
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            chatSocket.onerror = function(error) {
+                console.error('WebSocket Error:', error);
+                appendMessage('WebSocket Error: ' + error.message, 'error-message');
+                sendButton.disabled = true;
+            };
+        }
+
+        function sendMessage() {
+            const message = messageInput.value.trim(); // Trim whitespace
+            if (message) {
+                if (chatSocket.readyState === WebSocket.OPEN) {
+                    chatSocket.send(JSON.stringify({ 'message': message }));
+                    messageInput.value = '';
+                } else {
+                    appendMessage('Error: WebSocket connection is not open.', 'error-message');
+                }
+            } else {
+                appendMessage('Error: Message cannot be empty.', 'error-message'); // Handle empty messages
+            }
+        }
+
+        function appendMessage(message, className) {
+            const messageElement = document.createElement('div');
+            messageElement.textContent = message;
+            messageElement.className = className;
+            chatBox.appendChild(messageElement);
+            chatBox.scrollTop = chatBox.scrollHeight; // Scroll to the bottom
+        }
+
+        // Initialize WebSocket connection
+        connectWebSocket();
+
+        const sendButton = document.getElementById('sendButton');
+        const messageInput = document.getElementById('messageInput');
+        const chatBox = document.getElementById('chatBox');
+
+        sendButton.onclick = sendMessage;
+
+        messageInput.onkeypress = function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        };
+
+        window.onbeforeunload = function() {
+            if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+                chatSocket.close();
+            }
+        };
+    </script>
+</body>
+</html>
